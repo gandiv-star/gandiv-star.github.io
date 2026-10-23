@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ગાંડિવ એપ</title>
+<meta name="theme-color" content="#14225A">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ગાંડિવ">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+Bhai+2:wght@600;800&family=Hind+Vadodara:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#14225A; --ink-2:#22347D; --gold:#F2A900; --gold-soft:#FFF3D1;
+  --paper:#F6F5F1; --card:#fff; --line:#E4E1D8; --muted:#5B6478; --text:#1B2133;
+  --ok:#1F8A5B; --ok-soft:#E5F5EC; --bad:#C0352B; --bad-soft:#FDECEC; --warn:#A86B00; --warn-soft:#FFF3D1;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--paper);color:var(--text);font:16px/1.55 "Hind Vadodara",system-ui,sans-serif}
+h1,h2,h3{font-family:"Baloo Bhai 2",sans-serif;line-height:1.2;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.hide{display:none!important}
+
+/* Login */
+#login{min-height:100%;display:grid;place-items:center;padding:24px;background:var(--ink)}
+.login-box{width:100%;max-width:380px;background:#fff;border-radius:22px;padding:28px 24px}
+.login-box .logo{display:flex;gap:12px;align-items:center;margin-bottom:22px}
+.login-box .logo img{width:52px;height:52px;border-radius:12px}
+.login-box h1{font-size:24px;color:var(--ink)}
+.login-box p.sub{margin:0;color:var(--muted);font-size:14px}
+.login-help{font-size:13.5px;color:var(--muted);margin-top:16px}
+.login-help a{color:var(--ink)}
+
+/* Shell */
+#shell{min-height:100%;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:10;background:var(--ink);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.topbar .t{flex:1;min-width:0}
+.topbar .t small{display:block;color:#AFC0EE;font-size:12.5px}
+.topbar .t b{font:700 19px "Baloo Bhai 2";display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icon-btn{background:rgba(255,255,255,.12);border:0;color:#fff;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;cursor:pointer}
+.icon-btn svg{width:20px;height:20px}
+main{flex:1;width:100%;max-width:860px;margin:0 auto;padding:16px 14px calc(96px + var(--safe-b))}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:6px 4px calc(6px + var(--safe-b))}
+.tabs button{flex:1;max-width:110px;background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;color:var(--muted);padding:6px 2px;border-radius:12px;cursor:pointer}
+.tabs button svg{width:22px;height:22px}
+.tabs button.on{color:var(--ink);font-weight:600}
+.tabs button.on svg{color:var(--ink)}
+.tabs button.on .pill{background:var(--gold-soft)}
+.tabs .pill{padding:3px 16px;border-radius:14px;display:grid;place-items:center}
+
+/* Elements */
+.h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 2px 12px}
+.h h2{font-size:22px;color:var(--ink)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
+@media(min-width:640px){.stats{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.stat .n{font:800 28px "Baloo Bhai 2";color:var(--ink);line-height:1.1}
+.stat .l{font-size:13.5px;color:var(--muted)}
+.stat.gold{background:var(--ink);border-color:var(--ink)}
+.stat.gold .n{color:var(--gold)} .stat.gold .l{color:#C9D3F3}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:12px;padding:11px 18px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn:disabled{opacity:.55;cursor:default}
+.btn svg{width:18px;height:18px}
+.b-ink{background:var(--ink);color:#fff}
+.b-gold{background:var(--gold);color:var(--ink)}
+.b-line{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.b-wa{background:#1FAF55;color:#fff}
+.b-bad{background:var(--bad-soft);color:var(--bad)}
+.b-sm{padding:7px 12px;font-size:14px;border-radius:10px}
+.b-full{width:100%}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap}
+label.l{display:block;font-weight:600;font-size:14px;margin:0 0 5px;color:var(--ink)}
+.in{width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:12px;background:#fff}
+.in:focus{border-color:var(--ink);outline:none}
+textarea.in{resize:vertical}
+.f{margin-bottom:12px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:420px){.g3{grid-template-columns:1fr 1fr}}
+.search{display:flex;gap:8px;margin-bottom:12px}
+.search .in{flex:1}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:20px;padding:6px 14px;font-size:14px;white-space:nowrap;cursor:pointer}
+.chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.list{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:12px}
+.item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;width:100%;text-align:left}
+.item:last-child{border-bottom:0}
+.item .av{width:40px;height:40px;border-radius:12px;background:var(--gold-soft);color:var(--ink);display:grid;place-items:center;font:800 18px "Baloo Bhai 2";flex:none}
+.item .mid{flex:1;min-width:0}
+.item .mid b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .mid small{color:var(--muted);font-size:13.5px}
+.item .end{text-align:right;font-weight:600;font-size:15px}
+.tag{display:inline-block;padding:2px 9px;border-radius:12px;font-size:12.5px;font-weight:600}
+.t-ok{background:var(--ok-soft);color:var(--ok)}
+.t-bad{background:var(--bad-soft);color:var(--bad)}
+.t-warn{background:var(--warn-soft);color:var(--warn)}
+.t-ink{background:#E8ECF8;color:var(--ink)}
+.empty{text-align:center;color:var(--muted);padding:34px 16px}
+.empty b{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
+.muted{color:var(--muted)} .small{font-size:13.5px}
+.ok{color:var(--ok)} .bad{color:var(--bad)}
+.kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--muted)}
+.bar{height:8px;background:#ECEAF4;border-radius:6px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--ok)}
+.chart{width:100%;height:170px;display:block}
+
+/* Attendance toggles */
+.att{display:flex;gap:6px}
+.att button{width:40px;height:36px;border-radius:10px;border:1.5px solid var(--line);background:#fff;font-weight:700;cursor:pointer}
+.att button.p.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.att button.a.on{background:var(--bad);border-color:var(--bad);color:#fff}
+.att button.l.on{background:var(--gold);border-color:var(--gold);color:var(--ink)}
+
+/* Sheet */
+.sheet-bg{position:fixed;inset:0;background:rgba(14,24,64,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--paper);width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:8px 16px calc(20px + var(--safe-b));animation:up .22s ease-out}
+@media(min-width:700px){.sheet-bg{align-items:center}.sheet{border-radius:22px}}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.sheet .grab{width:44px;height:5px;border-radius:3px;background:#CFCBC0;margin:4px auto 10px}
+.sheet .sh{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px}
+.sheet .sh h3{font-size:21px;color:var(--ink)}
+.x{background:#fff;border:1px solid var(--line);width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:20px;line-height:1;flex:none}
+
+/* Test-taking */
+.exam-top{position:sticky;top:64px;z-index:12;background:var(--ink);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+.timer{font:800 22px "Baloo Bhai 2";color:var(--gold)}
+.timer.low{color:#FF8A80}
+.q{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px}
+.q .qn{font-weight:600;margin-bottom:10px;white-space:pre-wrap}
+.opt{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;margin-top:8px;cursor:pointer}
+.opt .lt{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+.opt.sel{border-color:var(--ink);background:#EEF1FB}
+.opt.sel .lt{background:var(--ink);color:#fff;border-color:var(--ink)}
+.opt.right{border-color:var(--ok);background:var(--ok-soft)}
+.opt.wrong{border-color:var(--bad);background:var(--bad-soft)}
+.qnav{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.qnav span{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:13px;background:#fff;border:1px solid var(--line)}
+.qnav span.d{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* Toast */
+#toast{position:fixed;left:50%;top:76px;transform:translateX(-50%);background:var(--text);color:#fff;padding:11px 18px;border-radius:12px;z-index:60;font-size:15px;max-width:92vw;box-shadow:0 10px 24px -8px rgba(0,0,0,.4)}
+#toast.err{background:var(--bad)}
+
+/* Receipt print */
+#printArea{display:none}
+@media print{
+  body *{visibility:hidden}
+  #printArea,#printArea *{visibility:visible}
+  #printArea{display:block;position:absolute;left:0;top:0;width:100%}
+}
+.rcpt{max-width:520px;margin:0 auto;border:2px solid var(--ink);border-radius:12px;padding:20px;font-size:15px}
+.rcpt .rh{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:12px}
+.rcpt h2{color:var(--ink);font-size:24px}
+.rcpt .amt{font:800 30px "Baloo Bhai 2";color:var(--ink);margin:10px 0}
+.loader{display:grid;place-items:center;min-height:100vh;background:var(--ink);color:var(--gold);font:700 22px "Baloo Bhai 2"}
+.setup{max-width:560px;margin:40px auto;padding:20px}
+</style>
+</head>
+<body>
+<div id="boot" class="loader">ગાંડિવ…</div>
+
+<section id="login" class="hide">
+  <form class="login-box" id="loginForm">
+    <div class="logo"><img src="icons/icon-192.png" alt=""><div><h1>ગાંડિવ એકેડેમી</h1><p class="sub">વિદ્યાર્થી · વાલી · એડમિન</p></div></div>
+    <div class="f"><label class="l" for="lg-id">લોગિન ID</label><input class="in" id="lg-id" autocomplete="username" placeholder="ઉદા. G101 અથવા વાલીનો મોબાઇલ નંબર" required></div>
+    <div class="f"><label class="l" for="lg-pw">પાસવર્ડ</label><input class="in" id="lg-pw" type="password" autocomplete="current-password" required></div>
+    <button class="btn b-ink b-full" id="lg-btn" type="submit">લોગિન કરો</button>
+    <p class="login-help">વિદ્યાર્થી માટે ID ઉદા. <b>G101</b>, વાલી માટે <b>મોબાઇલ નંબર</b>. ID કે પાસવર્ડ ખબર ન હોય તો <a href="https://wa.me/919974788382" target="_blank" rel="noopener">એકેડેમીનો સંપર્ક કરો</a>.</p>
+    <p class="login-help"><a href="index.html">← વેબસાઇટ પર જાઓ</a></p>
+  </form>
+</section>
+
+<div id="shell" class="hide">
+  <header class="topbar">
+    <div class="t"><small id="tb-sub"></small><b id="tb-title">ગાંડિવ</b></div>
+    <button class="icon-btn hide" id="tb-switch" aria-label="બાળક બદલો"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></button>
+    <button class="icon-btn" id="tb-out" aria-label="લોગઆઉટ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg></button>
+  </header>
+  <main id="view"></main>
+  <nav class="tabs" id="tabs" aria-label="મેનુ"></nav>
+</div>
+
+<div id="sheetRoot"></div>
+<div id="printArea"></div>
+<div id="toast" class="hide" role="status"></div>
+
+<script type="module" src="app.js"></script>
+<script>
+if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+</script>
+</body>
+</html>

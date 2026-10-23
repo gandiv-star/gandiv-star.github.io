@@ -1,0 +1,17 @@
+{
+  "name": "ગાંડિવ એકેડેમી",
+  "short_name": "ગાંડિવ",
+  "description": "ગાંડિવ એકેડેમી, મહુવા — વિદ્યાર્થી, વાલી અને એડમિન એપ",
+  "lang": "gu",
+  "start_url": "app.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14225A",
+  "theme_color": "#14225A",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
