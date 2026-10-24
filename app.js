@@ -90,7 +90,7 @@ const MAT_T = { pdf: "PDF", video: "વિડિયો", link: "લિંક" };
 let app, auth, db, secAuth;
 const S = {
   role: null, user: null, profile: null, tab: "home", sub: null,
-  students: [], batches: [], payments: [], tests: [], leads: [], notices: [], materials: [], toppers: [], homework: [], punishments: [], timetable: [], ttBatch: null, teachers: [], roster: [], rosterLoaded: false, studentsLoaded: false,
+  students: [], batches: [], payments: [], tests: [], leads: [], notices: [], materials: [], toppers: [], homework: [], punishments: [], timetable: [], ttBatch: null, teachers: [], roster: [], rosterLoaded: false, studentsLoaded: false, tasks: [], logs: [], allLogs: [], ftk: "open", diaryDate: null,
   payIdx: {}, q: "", fb: "all", fl: "new", ft: "all", fm: "all",
   att: null, todayAtt: null, todayKey: null,
   kids: [], kidIdx: 0, kid: null, exam: null, unsub: []
@@ -127,7 +127,7 @@ async function onAuth(u) {
     S.profile = p.data(); S.role = S.profile.role;
     if (S.role === "teacher") {
       if (!(S.profile.batchIds || []).length) { toast("તમને હજુ કોઈ બેચ આપી નથી. એકેડેમીનો સંપર્ક કરો.", true); await signOut(auth); return; }
-      Object.assign(S, { students: [], batches: [], homework: [], punishments: [], timetable: [] });
+      Object.assign(S, { students: [], batches: [], homework: [], punishments: [], timetable: [], tasks: [], logs: [] });
       showShell(); startTeacher(); return;
     }
     if (!["student", "parent"].includes(S.role) || !(S.profile.studentIds || []).length) {
@@ -184,7 +184,7 @@ function render() {
 const TABS = {
   admin: [["home", "હોમ", "home"], ["students", "વિદ્યાર્થી", "users"], ["att", "હાજરી", "check"], ["hw", "હોમવર્ક", "book"], ["fees", "ફી", "rupee"], ["tests", "ટેસ્ટ", "test"], ["more", "વધુ", "more"]],
   student: [["home", "હોમ", "home"], ["hw", "હોમવર્ક", "check"], ["tests", "ટેસ્ટ", "test"], ["notes", "નોટ્સ", "book"], ["progress", "પ્રગતિ", "chart"]],
-  teacher: [["home", "હોમ", "home"], ["att", "હાજરી", "check"], ["hw", "હોમવર્ક", "book"]],
+  teacher: [["home", "હોમ", "home"], ["att", "હાજરી", "check"], ["hw", "હોમવર્ક", "book"], ["tasks", "ટાસ્ક", "test"]],
   parent: [["home", "હોમ", "home"], ["hw", "હોમવર્ક", "book"], ["att", "હાજરી", "check"], ["marks", "માર્ક્સ", "chart"], ["fees", "ફી", "rupee"]]
 };
 function renderTabs() {
@@ -254,6 +254,8 @@ function startAdmin() {
   listen("students", collection(db, "students"), () => { S.studentsLoaded = true; syncRoster(); });
   listen("roster", collection(db, "roster"), () => { S.rosterLoaded = true; syncRoster(); });
   listen("teachers", collection(db, "teachers"));
+  listen("tasks", collection(db, "tasks"));
+  listen("logs", query(collection(db, "teachingLogs"), where("date", "==", ymd())), () => { if (!S.diaryDate || S.diaryDate === ymd()) S.allLogs = S.logs; });
   listen("batches", collection(db, "batches"));
   listen("payments", collection(db, "payments"), () => {
     S.payIdx = {};
@@ -301,6 +303,7 @@ function adminHome() {
     <div class="stat"><div class="n">${money(monthColl)}</div><div class="l">${MONTHS[new Date().getMonth()]}માં જમા</div></div>
     <div class="stat"><div class="n ${due > 0 ? "bad" : ""}">${money(due)}</div><div class="l">કુલ બાકી ફી</div></div>
   </div>
+  ${directorBlock()}
   ${newLeads ? `<button class="card item" style="border-radius:18px" data-act="goLeads"><span class="av">${newLeads}</span><span class="mid"><b>નવી પ્રવેશ પૂછપરછ</b><small>વેબસાઇટ પરથી આવેલી નોંધણી</small></span><span class="tag t-warn">જુઓ</span></button>` : ""}
   <div class="h"><h2>બેચ — આજની હાજરી</h2></div>
   ${batches.length ? `<div class="list">${batches.map(b => {
@@ -880,6 +883,8 @@ function adminMore() {
   if (sub === "export") return moreExport(back);
   if (sub === "timetable") return moreTimetable(back);
   if (sub === "teachers") return moreTeachers(back);
+  if (sub === "tasks") return moreTasks(back);
+  if (sub === "diary") return moreDiary(back);
   const newL = S.leads.filter(l => (l.status || "new") === "new").length;
   const it = (s, t, d, i, badge = "") => `<button class="item" data-act="sub" data-s="${s}"><span class="av">${ic(i)}</span><span class="mid"><b>${t}</b><small>${d}</small></span>${badge}</button>`;
   return `<div class="h"><h2>વધુ</h2></div><div class="list">
@@ -887,6 +892,8 @@ function adminMore() {
     ${it("batches", "બેચ", `${S.batches.length} બેચ · સમય અને ફી`, "check")}
     ${it("timetable", "ટાઇમટેબલ", "બેચ પ્રમાણે અઠવાડિયાના લેક્ચર", "test")}
     ${it("teachers", "શિક્ષકો", `${S.teachers.length} શિક્ષક · લોગિન અને બેચ`, "users")}
+    ${it("tasks", "શિક્ષક ટાસ્ક", `${S.tasks.filter(t => t.status !== "done").length} ચાલુ`, "check", S.tasks.filter(t => t.status === "submitted").length ? `<span class="tag t-warn">${S.tasks.filter(t => t.status === "submitted").length} રિવ્યૂ</span>` : "")}
+    ${it("diary", "ટીચિંગ ડાયરી", "દરેક દિવસે શું ભણાવ્યું", "book")}
     ${it("materials", "નોટ્સ અને વિડિયો", `${S.materials.length} સામગ્રી`, "book")}
     ${it("notices", "સૂચના અને હોમવર્ક", `${S.notices.length} સૂચના`, "bell")}
     ${it("toppers", "વેબસાઇટ પર ટોપર્સ", `${S.toppers.length} ટોપર્સ`, "chart")}
@@ -1640,6 +1647,8 @@ function startTeacher() {
   merge("students", bid => query(collection(db, "roster"), where("batchId", "==", bid)));
   merge("homework", bid => query(collection(db, "homework"), where("batchId", "==", bid)));
   merge("punishments", bid => query(collection(db, "punishments"), where("batchId", "==", bid)));
+  merge("logs", bid => query(collection(db, "teachingLogs"), where("batchId", "==", bid), where("date", "==", ymd())));
+  S.unsub.push(onSnapshot(query(collection(db, "tasks"), where("teacherUid", "==", S.user.uid)), sn => { S.tasks = sn.docs.map(d => ({ id: d.id, ...d.data() })); schedule(); }, e => console.warn(e)));
   const bparts = {}, tparts = {};
   bids.forEach(bid => {
     S.unsub.push(onSnapshot(doc(db, "batches", bid), d => { if (d.exists()) bparts[bid] = { id: d.id, ...d.data() }; S.batches = Object.values(bparts); schedule(); }, e => console.warn(e)));
@@ -1654,15 +1663,177 @@ function teHome() {
   const L = arr => arr.length ? `<div class="list">${arr.map(x => `<div class="item" style="cursor:default"><span class="mid"><b>${t12(x.start)}–${t12(x.end)} · ${esc(x.subject)}</b><small>${esc(batchName(x.b))}${x.teacher ? " · " + esc(x.teacher) : ""}${x.room ? " · " + esc(x.room) : ""}</small></span></div>`).join("")}</div>` : `<div class="card small muted">કોઈ લેક્ચર નથી.</div>`;
   return `<div class="card" style="background:var(--ink);color:#fff;border-color:var(--ink)"><small style="color:#AFC0EE">શિક્ષક · ${esc(S.profile.teacherId || "")}</small><h2 style="color:#fff;font-size:24px">${esc(S.profile.name || "")}</h2><small style="color:var(--gold)">${S.batches.map(b => esc(b.name)).join(" · ")}</small></div>
   ${due ? `<button class="card item" style="border-radius:18px;border:2px solid var(--gold)" data-act="tab" data-t="hw"><span class="av">${due}</span><span class="mid"><b>આજે ચેક કરવાનું હોમવર્ક</b><small>હોમવર્ક અને સજા-હોમવર્ક</small></span><span class="tag t-warn">ચેક કરો</span></button>` : ""}
-  <div class="h"><h2>આજના લેક્ચર</h2></div>${L(today)}
+  ${(() => { const o = S.tasks.filter(t => !["done", "submitted"].includes(t.status)); return o.length ? `<button class="card item" style="border-radius:18px" data-act="tab" data-t="tasks"><span class="av">${o.length}</span><span class="mid"><b>બાકી ટાસ્ક</b><small>${o.filter(tkOver).length ? `<span class="bad">${o.filter(tkOver).length} મોડા</span>` : "ટાસ્ક જુઓ"}</small></span></button>` : ""; })()}
+  <div class="h"><h2>આજના લેક્ચર</h2></div>${lectureDiaryList(today, ymd())}
   <div class="h"><h2>કાલના લેક્ચર (${DAYS[tdw]})</h2></div>${L(tom)}
   <button class="btn b-ink b-full" data-act="tab" data-t="att" style="margin-top:6px">${ic("check")} હાજરી પૂરો</button>`;
 }
 
+// =============================================================
+//  શિક્ષક ટાસ્ક + ટીચિંગ ડાયરી + ડિરેક્ટર સારાંશ (તબક્કો 2 — ભાગ 2)
+// =============================================================
+const PRI = { low: "ઓછી", normal: "સામાન્ય", high: "વધુ", urgent: "તાત્કાલિક" };
+const PRI_TAG = { low: "t-ink", normal: "t-ink", high: "t-warn", urgent: "t-bad" };
+const TK_ST = { pending: "બાકી", progress: "ચાલુ", submitted: "રિવ્યૂ માટે", returned: "ફરી કરવું", done: "પૂર્ણ" };
+const TK_TAG = { pending: "t-ink", progress: "t-warn", submitted: "t-warn", returned: "t-bad", done: "t-ok" };
+const tkOver = t => t.status !== "done" && t.status !== "submitted" && t.deadline && t.deadline < ymd();
+const tkTag = t => tkOver(t) ? `<span class="tag t-bad">મોડું</span>` : `<span class="tag ${TK_TAG[t.status] || "t-ink"}">${TK_ST[t.status] || ""}</span>`;
+const tName = uid => S.teachers.find(t => t.uid === uid)?.name || "";
+
+function tasksList(list, act) {
+  return list.length ? `<div class="list">${list.map(t => `<button class="item" data-act="${act}" data-id="${t.id}"><span class="mid"><b>${esc(t.title)}</b><small>${S.role === "admin" ? esc(tName(t.teacherUid)) + " · " : ""}${t.batchId ? esc(batchName(t.batchId)) + " · " : ""}છેલ્લી ${fmtD(t.deadline)} · <span class="${t.priority === "urgent" ? "bad" : ""}">${PRI[t.priority] || ""}</span></small></span>${tkTag(t)}</button>`).join("")}</div>` : `<div class="card small muted">કોઈ ટાસ્ક નથી.</div>`;
+}
+const sortTasks = l => l.slice().sort((a, b) => (a.status === "done") - (b.status === "done") || (a.deadline || "").localeCompare(b.deadline || ""));
+
+// ---------- Admin: ટાસ્ક ----------
+function moreTasks(back) {
+  const f = S.ftk || "open";
+  const L = S.tasks.filter(t => f === "open" ? !["done", "submitted"].includes(t.status) : f === "review" ? t.status === "submitted" : t.status === "done");
+  return `<div class="h">${back}<button class="btn b-ink b-sm" data-act="newTask">${ic("plus")} ટાસ્ક આપો</button></div>
+  ${chips("ftk", [["open", `ચાલુ (${S.tasks.filter(t => !["done", "submitted"].includes(t.status)).length})`], ["review", `રિવ્યૂ (${S.tasks.filter(t => t.status === "submitted").length})`], ["done", "પૂર્ણ"]])}
+  ${tasksList(sortTasks(L), "openTaskA")}`;
+}
+ACT.newTask = () => {
+  const act = S.teachers.filter(t => t.active !== false);
+  if (!act.length) return toast("પહેલાં ‘વધુ → શિક્ષકો’ માં શિક્ષક ઉમેરો.", true);
+  openSheet("નવો ટાસ્ક", `<form data-form="task">
+    <div class="f"><label class="l">કોને *</label><select class="in" name="teacherUid" required><option value="">પસંદ કરો</option>${act.map(t => `<option value="${esc(t.uid)}">${esc(t.name)}</option>`).join("")}</select></div>
+    <div class="f"><label class="l">ટાસ્ક *</label><input class="in" name="title" required maxlength="120" placeholder="ઉદા. ધો. 10 વિજ્ઞાન પ્રકરણ 4 નું રિવિઝન + 10 પ્રશ્નનો ટેસ્ટ"></div>
+    <div class="f"><label class="l">વિગત / પૂર્ણ થયાનો માપદંડ</label><textarea class="in" name="details" rows="3" maxlength="1500"></textarea></div>
+    <div class="g2"><div class="f"><label class="l">બેચ (વૈકલ્પિક)</label><select class="in" name="batchId"><option value="">—</option>${S.batches.slice().sort(by("name")).map(b => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join("")}</select></div>
+    <div class="f"><label class="l">પ્રાથમિકતા</label><select class="in" name="priority">${Object.entries(PRI).map(([k, l]) => `<option value="${k}" ${k === "normal" ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
+    <div class="g2"><div class="f"><label class="l">શરૂ</label><input class="in" type="date" name="startDate" value="${ymd()}"></div>
+    <div class="f"><label class="l">છેલ્લી તારીખ *</label><input class="in" type="date" name="deadline" required value="${ymd()}"></div></div>
+    <button class="btn b-ink b-full" type="submit">ટાસ્ક આપો</button></form>`);
+};
+FORMS.task = async (f, btn) => {
+  const v = formVals(f);
+  if (!v.teacherUid || !v.title || !v.deadline) return toast("શિક્ષક, ટાસ્ક અને છેલ્લી તારીખ જરૂરી છે.", true);
+  if (v.startDate && v.deadline < v.startDate) return toast("છેલ્લી તારીખ શરૂ તારીખ પછીની હોવી જોઈએ.", true);
+  const t = S.teachers.find(x => x.uid === v.teacherUid);
+  await busy(btn, async () => {
+    try {
+      await addDoc(collection(db, "tasks"), { teacherUid: v.teacherUid, teacherId: t?.id || "", title: v.title, details: v.details || "", batchId: v.batchId || "", priority: v.priority, startDate: v.startDate || ymd(), deadline: v.deadline, status: "pending", comment: "", adminNote: "", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      closeSheet(); toast("ટાસ્ક અપાઈ ગયો.");
+      if (t?.phone) openSheet("શિક્ષકને જાણ કરો", `<a class="btn b-wa b-full" target="_blank" rel="noopener" href="${waLink(t.phone, `${ACADEMY.name} — નવો ટાસ્ક\n${v.title}\nછેલ્લી તારીખ: ${fmtD(v.deadline)}\nએપમાં ‘ટાસ્ક’ જુઓ.`)}">${ic("wa")} ${esc(t.name)} ને WhatsApp</a>`);
+    } catch (e) { fail(e); }
+  });
+};
+const taskInfo = t => `<div class="card"><div class="row-btns" style="justify-content:space-between">${tkTag(t)}<span class="tag ${PRI_TAG[t.priority]}">${PRI[t.priority]}</span></div>
+  ${t.details ? `<div style="white-space:pre-wrap;margin-top:8px">${esc(t.details)}</div>` : ""}
+  <div class="kv" style="margin-top:8px"><span>શિક્ષક</span><b>${esc(tName(t.teacherUid) || S.profile?.name || "")}</b></div>
+  ${t.batchId ? `<div class="kv"><span>બેચ</span><b>${esc(batchName(t.batchId))}</b></div>` : ""}
+  <div class="kv"><span>શરૂ / છેલ્લી</span><b>${fmtD(t.startDate)} → ${fmtD(t.deadline)}</b></div>
+  ${t.comment ? `<div class="kv"><span>શિક્ષકની નોંધ</span><b style="white-space:pre-wrap">${esc(t.comment)}</b></div>` : ""}
+  ${t.adminNote ? `<div class="kv"><span>એડમિનની નોંધ</span><b style="white-space:pre-wrap">${esc(t.adminNote)}</b></div>` : ""}
+  ${t.submittedAt ? `<div class="kv"><span>રિવ્યૂ માટે મોકલ્યું</span><b>${fmtD(t.submittedAt)}</b></div>` : ""}</div>`;
+ACT.openTaskA = el => {
+  const t = S.tasks.find(x => x.id === el.dataset.id); if (!t) return;
+  openSheet(t.title, `${taskInfo(t)}
+    <form data-form="taskReview" data-id="${t.id}"><div class="f"><label class="l">તમારી નોંધ</label><textarea class="in" name="adminNote" rows="2" maxlength="500">${esc(t.adminNote)}</textarea></div>
+    <div class="row-btns"><button class="btn b-gold" type="submit" name="v" value="done">✓ મંજૂર / પૂર્ણ</button><button class="btn b-line" type="submit" name="v" value="returned">ફરી કરવા મોકલો</button></div></form>
+    <button class="btn b-bad b-full" style="margin-top:10px" data-act="delDoc" data-c="tasks" data-id="${t.id}">ટાસ્ક કાઢી નાખો</button>`);
+};
+FORMS.taskReview = async (f, btn) => {
+  const v = btn?.value || "done";
+  await busy(btn, async () => {
+    try { await updateDoc(doc(db, "tasks", f.dataset.id), { status: v, adminNote: f.adminNote.value.trim(), reviewedAt: ymd(), updatedAt: serverTimestamp() }); closeSheet(); toast(v === "done" ? "ટાસ્ક પૂર્ણ." : "ફરી કરવા મોકલ્યો."); } catch (e) { fail(e); }
+  });
+};
+
+// ---------- Teacher: ટાસ્ક ----------
+function teTasks() {
+  const open = S.tasks.filter(t => t.status !== "done"), done = S.tasks.filter(t => t.status === "done");
+  return `<div class="h"><h2>મારા ટાસ્ક</h2></div>${tasksList(sortTasks(open), "openTaskT")}
+  ${done.length ? `<div class="h"><h2>પૂર્ણ થયેલા</h2></div>${tasksList(sortTasks(done).slice(0, 20), "openTaskT")}` : ""}`;
+}
+ACT.openTaskT = el => {
+  const t = S.tasks.find(x => x.id === el.dataset.id); if (!t) return;
+  const can = t.status !== "done" && t.status !== "submitted";
+  openSheet(t.title, `${taskInfo(t)}
+    ${can ? `<form data-form="taskUpd" data-id="${t.id}"><div class="f"><label class="l">તમારી નોંધ</label><textarea class="in" name="comment" rows="3" maxlength="800">${esc(t.comment)}</textarea></div>
+    <div class="row-btns"><button class="btn b-line" type="submit" name="v" value="progress">કામ ચાલુ છે</button><button class="btn b-gold" type="submit" name="v" value="submitted">✓ પૂર્ણ કર્યું</button></div></form>` : `<p class="small muted">${t.status === "submitted" ? "એડમિનના રિવ્યૂની રાહ છે." : "આ ટાસ્ક પૂર્ણ થઈ ગયો છે."}</p>`}`);
+};
+FORMS.taskUpd = async (f, btn) => {
+  const v = btn?.value || "progress";
+  const data = { status: v, comment: f.comment.value.trim(), updatedAt: serverTimestamp() };
+  if (v === "submitted") data.submittedAt = ymd();
+  await busy(btn, async () => { try { await updateDoc(doc(db, "tasks", f.dataset.id), data); closeSheet(); toast(v === "submitted" ? "રિવ્યૂ માટે મોકલ્યું." : "સ્થિતિ સાચવી."); } catch (e) { fail(e); } });
+};
+
+// ---------- ટીચિંગ ડાયરી ----------
+const logId = (bid, date, k) => `${bid}_${date}_${k}`;
+const myLecturesToday = () => {
+  const dow = new Date().getDay();
+  return S.timetable.flatMap(t => slotsOf(t, dow).map(x => ({ ...x, b: t.id }))).sort((a, b) => tmin(a.start) - tmin(b.start));
+};
+ACT.diary = el => {
+  const date = el.dataset.date || ymd(), bid = el.dataset.b, k = el.dataset.k;
+  const tt = S.timetable.find(t => t.id === bid), sl = (tt?.slots || []).find(x => x.k === k) || {};
+  const old = S.logs.find(l => l.id === logId(bid, date, k)) || {};
+  openSheet(`ડાયરી — ${sl.subject || ""}`, `<p class="small muted" style="margin-top:0">${esc(batchName(bid))} · ${fmtD(date)} · ${t12(sl.start)}–${t12(sl.end)}</p>
+  <form data-form="diary" data-b="${esc(bid)}" data-k="${esc(k)}" data-date="${date}">
+    <div class="f"><label class="l">પ્રકરણ / ટોપિક *</label><input class="in" name="topic" required maxlength="120" value="${esc(old.topic)}"></div>
+    <div class="f"><label class="l">શું ભણાવ્યું / ક્લાસવર્ક</label><textarea class="in" name="classwork" rows="2" maxlength="800">${esc(old.classwork)}</textarea></div>
+    <div class="g2"><div class="f"><label class="l">ખરેખર કેટલી મિનિટ</label><input class="in" name="minutes" inputmode="numeric" value="${esc(old.minutes ?? (tmin(sl.end) - tmin(sl.start) || ""))}"></div>
+    <div class="f"><label class="l">આપેલું હોમવર્ક</label><input class="in" name="homework" maxlength="200" value="${esc(old.homework)}"></div></div>
+    <div class="f"><label class="l">આગલા લેક્ચરમાં શું કરાવવું</label><input class="in" name="nextPlan" maxlength="200" value="${esc(old.nextPlan)}"></div>
+    <div class="f"><label class="l">ફોલો-અપ જરૂરી વિદ્યાર્થી / નોંધ</label><textarea class="in" name="notes" rows="2" maxlength="600">${esc(old.notes)}</textarea></div>
+    <p class="small muted">હોમવર્ક ટ્રેક કરવું હોય તો ‘હોમવર્ક’ ટેબમાંથી પણ આપો, જેથી ચેકિંગ યાદીમાં આવે.</p>
+    <button class="btn b-ink b-full" type="submit">ડાયરી સાચવો</button></form>`);
+};
+FORMS.diary = async (f, btn) => {
+  const v = formVals(f), bid = f.dataset.b, k = f.dataset.k, date = f.dataset.date;
+  if (!v.topic) return toast("પ્રકરણ / ટોપિક લખો.", true);
+  const tt = S.timetable.find(t => t.id === bid), sl = (tt?.slots || []).find(x => x.k === k) || {};
+  await busy(btn, async () => {
+    try {
+      await setDoc(doc(db, "teachingLogs", logId(bid, date, k)), { batchId: bid, date, slotK: k, subject: sl.subject || "", start: sl.start || "", end: sl.end || "", plannedTeacher: sl.teacher || "", teacherUid: S.user.uid, teacherName: S.role === "teacher" ? (S.profile.name || "") : "એડમિન", topic: v.topic, classwork: v.classwork || "", minutes: num(v.minutes), homework: v.homework || "", nextPlan: v.nextPlan || "", notes: v.notes || "", updatedAt: serverTimestamp() });
+      closeSheet(); toast("ડાયરી સાચવી.");
+    } catch (e) { fail(e); }
+  });
+};
+function lectureDiaryList(list, date) {
+  if (!list.length) return `<div class="card small muted">આજે કોઈ લેક્ચર નથી.</div>`;
+  return `<div class="list">${list.map(x => { const lg = S.logs.find(l => l.id === logId(x.b, date, x.k)); return `<div class="item" style="cursor:default"><span class="mid"><b>${t12(x.start)}–${t12(x.end)} · ${esc(x.subject)}</b><small>${esc(batchName(x.b))}${x.teacher ? " · " + esc(x.teacher) : ""}${lg ? " · " + esc(lg.topic) : ""}</small></span>${lg ? `<button class="btn b-line b-sm" data-act="diary" data-b="${esc(x.b)}" data-k="${esc(x.k)}" data-date="${date}">✓ લખાઈ</button>` : `<button class="btn b-gold b-sm" data-act="diary" data-b="${esc(x.b)}" data-k="${esc(x.k)}" data-date="${date}">ડાયરી</button>`}</div>`; }).join("")}</div>`;
+}
+function moreDiary(back) {
+  const d = S.diaryDate || ymd();
+  const logs = S.allLogs.filter(l => l.date === d).sort((a, b) => tmin(a.start) - tmin(b.start));
+  return `<div class="h">${back}</div>
+  <div class="f"><input class="in" type="date" value="${d}" max="${ymd()}" data-change="diaryDate"></div>
+  ${logs.length ? logs.map(l => `<div class="card"><div class="row-btns" style="justify-content:space-between"><b>${esc(l.subject)} · ${esc(batchName(l.batchId))}</b><small class="muted">${t12(l.start)}</small></div>
+    <div style="margin-top:4px"><b>${esc(l.topic)}</b></div>${l.classwork ? `<div class="small" style="white-space:pre-wrap">${esc(l.classwork)}</div>` : ""}
+    <p class="small muted" style="margin:6px 0 0">${esc(l.teacherName)}${l.minutes ? ` · ${l.minutes} મિનિટ` : ""}${l.homework ? ` · HW: ${esc(l.homework)}` : ""}${l.nextPlan ? ` · આગળ: ${esc(l.nextPlan)}` : ""}</p>${l.notes ? `<p class="small" style="margin:4px 0 0">નોંધ: ${esc(l.notes)}</p>` : ""}</div>`).join("") : `<div class="card">${empty("આ દિવસની કોઈ ડાયરી નથી")}</div>`}`;
+}
+CHG.diaryDate = async el => {
+  S.diaryDate = el.value;
+  try { const sn = await getDocs(query(collection(db, "teachingLogs"), where("date", "==", el.value))); S.allLogs = sn.docs.map(d => ({ id: d.id, ...d.data() })); } catch (e) { fail(e); }
+  render();
+};
+
+// ---------- ડિરેક્ટર સારાંશ (એડમિન હોમ) ----------
+function directorBlock() {
+  const lec = myLecturesToday();
+  const written = lec.filter(x => S.logs.some(l => l.id === logId(x.b, ymd(), x.k))).length;
+  const attPending = S.batches.filter(b => active().some(s => s.batchId === b.id) && S.todayAtt && !S.todayAtt[b.id]).length;
+  const over = S.tasks.filter(tkOver).length, rev = S.tasks.filter(t => t.status === "submitted").length;
+  if (!lec.length && !S.tasks.length) return "";
+  return `<div class="h"><h2>આજનો સારાંશ</h2></div>
+  <div class="stats">
+    <div class="stat"><div class="n ${lec.length && written < lec.length ? "bad" : ""}">${written}/${lec.length}</div><div class="l">લેક્ચર ડાયરી લખાઈ</div></div>
+    <div class="stat"><div class="n ${attPending ? "bad" : ""}">${attPending}</div><div class="l">બેચની હાજરી બાકી</div></div>
+    <button class="stat" style="text-align:left;cursor:pointer" data-act="goTasks" data-f="open"><div class="n ${over ? "bad" : ""}">${over}</div><div class="l">ટાસ્ક મોડા</div></button>
+    <button class="stat" style="text-align:left;cursor:pointer" data-act="goTasks" data-f="review"><div class="n">${rev}</div><div class="l">રિવ્યૂ માટે</div></button>
+  </div>
+  ${lec.length ? `<div class="h"><h2 style="font-size:18px">આજના લેક્ચર</h2></div>${lectureDiaryList(lec, ymd())}` : ""}`;
+}
+ACT.goTasks = el => { S.tab = "more"; S.sub = "tasks"; S.ftk = el.dataset.f; render(); };
+
 const VIEWS = {
   admin: { home: adminHome, students: adminStudents, att: adminAtt, hw: adminHw, fees: adminFees, tests: adminTests, more: adminMore },
   student: { home: stHome, hw: hwView, tests: stTests, notes: stNotes, progress: stProgress, notices: stNotices },
-  teacher: { home: teHome, att: adminAtt, hw: adminHw },
+  teacher: { home: teHome, att: adminAtt, hw: adminHw, tasks: teTasks },
   parent: { home: paHome, hw: hwView, att: paAtt, marks: paMarks, fees: paFees, notices: stNotices }
 };
 
