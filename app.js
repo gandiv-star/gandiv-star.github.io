@@ -90,7 +90,7 @@ const MAT_T = { pdf: "PDF", video: "વિડિયો", link: "લિંક" };
 let app, auth, db, secAuth;
 const S = {
   role: null, user: null, profile: null, tab: "home", sub: null,
-  students: [], batches: [], payments: [], tests: [], leads: [], notices: [], materials: [], toppers: [], homework: [], punishments: [], timetable: [], ttBatch: null,
+  students: [], batches: [], payments: [], tests: [], leads: [], notices: [], materials: [], toppers: [], homework: [], punishments: [], timetable: [], ttBatch: null, teachers: [], roster: [], rosterLoaded: false, studentsLoaded: false,
   payIdx: {}, q: "", fb: "all", fl: "new", ft: "all", fm: "all",
   att: null, todayAtt: null, todayKey: null,
   kids: [], kidIdx: 0, kid: null, exam: null, unsub: []
@@ -125,6 +125,11 @@ async function onAuth(u) {
     const p = await getDoc(doc(db, "users", u.uid));
     if (!p.exists()) { toast("આ એકાઉન્ટ એકેડેમીમાં નોંધાયેલું નથી.", true); await signOut(auth); return; }
     S.profile = p.data(); S.role = S.profile.role;
+    if (S.role === "teacher") {
+      if (!(S.profile.batchIds || []).length) { toast("તમને હજુ કોઈ બેચ આપી નથી. એકેડેમીનો સંપર્ક કરો.", true); await signOut(auth); return; }
+      Object.assign(S, { students: [], batches: [], homework: [], punishments: [], timetable: [] });
+      showShell(); startTeacher(); return;
+    }
     if (!["student", "parent"].includes(S.role) || !(S.profile.studentIds || []).length) {
       toast("એકાઉન્ટ અધૂરું છે. એકેડેમીનો સંપર્ક કરો.", true); await signOut(auth); return;
     }
@@ -136,9 +141,9 @@ async function onAuth(u) {
 
 function showShell() {
   $("#login").classList.add("hide"); $("#shell").classList.remove("hide");
-  const sub = { admin: "એડમિન", student: "વિદ્યાર્થી", parent: "વાલી" }[S.role];
+  const sub = { admin: "એડમિન", student: "વિદ્યાર્થી", parent: "વાલી", teacher: "શિક્ષક" }[S.role];
   $("#tb-sub").textContent = sub + " · " + ACADEMY.name;
-  $("#tb-switch").classList.toggle("hide", !(S.role === "parent" && (S.profile.studentIds || []).length > 1));
+  $("#tb-switch").classList.toggle("hide", !(S.role === "parent" && (S.profile?.studentIds || []).length > 1));
   render();
 }
 
@@ -173,12 +178,13 @@ function render() {
   const fn = VIEWS[S.role]?.[S.tab] || (() => "");
   v.innerHTML = S.exam ? viewExam() : fn();
   renderTabs();
-  $("#tb-title").textContent = S.role === "admin" ? ACADEMY.name : (S.kid ? S.kid.s.name : ACADEMY.name);
+  $("#tb-title").textContent = S.role === "admin" ? ACADEMY.name : S.role === "teacher" ? (S.profile.name || ACADEMY.name) : (S.kid ? S.kid.s.name : ACADEMY.name);
   if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.p, keep.p); } catch {} } }
 }
 const TABS = {
   admin: [["home", "હોમ", "home"], ["students", "વિદ્યાર્થી", "users"], ["att", "હાજરી", "check"], ["hw", "હોમવર્ક", "book"], ["fees", "ફી", "rupee"], ["tests", "ટેસ્ટ", "test"], ["more", "વધુ", "more"]],
   student: [["home", "હોમ", "home"], ["hw", "હોમવર્ક", "check"], ["tests", "ટેસ્ટ", "test"], ["notes", "નોટ્સ", "book"], ["progress", "પ્રગતિ", "chart"]],
+  teacher: [["home", "હોમ", "home"], ["att", "હાજરી", "check"], ["hw", "હોમવર્ક", "book"]],
   parent: [["home", "હોમ", "home"], ["hw", "હોમવર્ક", "book"], ["att", "હાજરી", "check"], ["marks", "માર્ક્સ", "chart"], ["fees", "ફી", "rupee"]]
 };
 function renderTabs() {
@@ -245,7 +251,9 @@ function listen(name, ref, after) {
   }, err => { console.error(name, err); toast("ડેટા લોડ ન થયો (" + name + ")", true); }));
 }
 function startAdmin() {
-  listen("students", collection(db, "students"));
+  listen("students", collection(db, "students"), () => { S.studentsLoaded = true; syncRoster(); });
+  listen("roster", collection(db, "roster"), () => { S.rosterLoaded = true; syncRoster(); });
+  listen("teachers", collection(db, "teachers"));
   listen("batches", collection(db, "batches"));
   listen("payments", collection(db, "payments"), () => {
     S.payIdx = {};
@@ -554,7 +562,7 @@ ACT.attSave = async el => {
     try {
       await setDoc(doc(db, "attendance", `${A.batchId}_${A.date}`), { batchId: A.batchId, date: A.date, ...out, updatedAt: serverTimestamp() });
       A.saved = true; toast("હાજરી સાચવી.");
-      if (A.date === ymd()) loadTodayAtt();
+      if (A.date === ymd() && S.role === "admin") loadTodayAtt();
       render();
       if (out.absent.length) {
         const abs = list.filter(s => out.absent.includes(s.id));
@@ -871,12 +879,14 @@ function adminMore() {
   if (sub === "toppers") return moreToppers(back);
   if (sub === "export") return moreExport(back);
   if (sub === "timetable") return moreTimetable(back);
+  if (sub === "teachers") return moreTeachers(back);
   const newL = S.leads.filter(l => (l.status || "new") === "new").length;
   const it = (s, t, d, i, badge = "") => `<button class="item" data-act="sub" data-s="${s}"><span class="av">${ic(i)}</span><span class="mid"><b>${t}</b><small>${d}</small></span>${badge}</button>`;
   return `<div class="h"><h2>વધુ</h2></div><div class="list">
     ${it("leads", "પ્રવેશ પૂછપરછ", "વેબસાઇટ ફોર્મ અને ફોલો-અપ", "users", newL ? `<span class="tag t-warn">${newL} નવી</span>` : "")}
     ${it("batches", "બેચ", `${S.batches.length} બેચ · સમય અને ફી`, "check")}
     ${it("timetable", "ટાઇમટેબલ", "બેચ પ્રમાણે અઠવાડિયાના લેક્ચર", "test")}
+    ${it("teachers", "શિક્ષકો", `${S.teachers.length} શિક્ષક · લોગિન અને બેચ`, "users")}
     ${it("materials", "નોટ્સ અને વિડિયો", `${S.materials.length} સામગ્રી`, "book")}
     ${it("notices", "સૂચના અને હોમવર્ક", `${S.notices.length} સૂચના`, "bell")}
     ${it("toppers", "વેબસાઇટ પર ટોપર્સ", `${S.toppers.length} ટોપર્સ`, "chart")}
@@ -1344,7 +1354,7 @@ ACT.hwReg = async el => {
   const h = S.homework.find(x => x.id === el.dataset.id); if (!h) return;
   const list = active().filter(s => s.batchId === h.batchId).sort(by("name"));
   const prev = {};
-  try { (await getDocs(query(collection(db, "homeworkStatus"), where("hwId", "==", h.id)))).forEach(d => prev[d.data().studentId] = d.data().status); } catch (e) { console.warn(e); }
+  try { (await getDocs(query(collection(db, "homeworkStatus"), where("hwId", "==", h.id), where("batchId", "==", h.batchId)))).forEach(d => prev[d.data().studentId] = d.data().status); } catch (e) { console.warn(e); }
   HWR = { h, list, m: {} };
   list.forEach(s => HWR.m[s.id] = prev[s.id] || "done");
   drawHwReg();
@@ -1388,7 +1398,8 @@ ACT.hwDel = async el => {
   try {
     const b = writeBatch(db);
     b.delete(doc(db, "homework", el.dataset.id));
-    (await getDocs(query(collection(db, "homeworkStatus"), where("hwId", "==", el.dataset.id)))).forEach(d => b.delete(d.ref));
+    const hh = S.homework.find(x => x.id === el.dataset.id);
+    (await getDocs(query(collection(db, "homeworkStatus"), where("hwId", "==", el.dataset.id), where("batchId", "==", hh.batchId)))).forEach(d => b.delete(d.ref));
     await b.commit(); closeSheet(); toast("કાઢી નાખ્યું.");
   } catch (e) { fail(e); }
 };
@@ -1516,9 +1527,142 @@ function hwHomeBlock(K) {
   return `${pnCards(K)}${open.length ? `<div class="h"><h2>બાકી હોમવર્ક</h2></div>${hwCards(open)}` : ""}`;
 }
 
+// =============================================================
+//  શિક્ષક લોગિન (તબક્કો 2 — ભાગ 1)
+// =============================================================
+// શિક્ષકને ફી ન દેખાય તે માટે વિદ્યાર્થીની ટૂંકી યાદી (roster) અલગ રાખીએ છીએ.
+const rosterOf = s => ({ name: s.name || "", batchId: s.batchId || "", parentName: s.parentName || "", parentPhone: s.parentPhone || "", phone: s.phone || "", active: s.active !== false });
+let rosterT = 0;
+function syncRoster() {
+  clearTimeout(rosterT);
+  rosterT = setTimeout(async () => {
+    if (S.role !== "admin" || !S.rosterLoaded || !S.studentsLoaded) return;
+    const cur = {}; S.roster.forEach(r => cur[r.id] = r);
+    const diff = S.students.filter(s => { const a = rosterOf(s), b = cur[s.id]; return !b || Object.keys(a).some(k => a[k] !== b[k]); });
+    for (let i = 0; i < diff.length; i += 400) {
+      const b = writeBatch(db);
+      diff.slice(i, i + 400).forEach(s => b.set(doc(db, "roster", s.id), rosterOf(s)));
+      try { await b.commit(); } catch (e) { console.warn("roster", e); return; }
+    }
+  }, 1200);
+}
+
+function moreTeachers(back) {
+  const list = S.teachers.slice().sort(by("name"));
+  return `<div class="h">${back}<button class="btn b-ink b-sm" data-act="newTeacher">${ic("plus")} શિક્ષક</button></div>
+  <p class="small muted">શિક્ષક ફક્ત પોતાને આપેલી બેચની હાજરી અને હોમવર્ક સંભાળી શકે. ફી કે બીજી બેચ નહીં દેખાય.</p>
+  ${list.length ? `<div class="list">${list.map(t => `<button class="item" data-act="openTeacher" data-id="${t.id}"><span class="av">${initial(t.name)}</span><span class="mid"><b>${esc(t.name)}</b><small>${esc(t.id)} · ${(t.batchIds || []).map(batchName).map(esc).join(", ") || "બેચ નથી"}</small></span>${t.active === false ? `<span class="tag t-bad">બંધ</span>` : ""}</button>`).join("")}</div>` : `<div class="card">${empty("હજુ કોઈ શિક્ષક નથી")}</div>`}`;
+}
+const batchChecks = (sel = []) => `<div class="row-btns">${S.batches.slice().sort(by("name")).map(b => `<label class="chip" style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="b_${esc(b.id)}" ${sel.includes(b.id) ? "checked" : ""}> ${esc(b.name)}</label>`).join("")}</div>`;
+const pickedBatches = f => S.batches.filter(b => f["b_" + b.id]?.checked).map(b => b.id);
+ACT.newTeacher = () => {
+  if (!S.batches.length) return toast("પહેલાં બેચ બનાવો.", true);
+  openSheet("નવા શિક્ષક", `<form data-form="teacher">
+    <div class="g2"><div class="f"><label class="l">નામ *</label><input class="in" name="name" required maxlength="60"></div>
+    <div class="f"><label class="l">મોબાઇલ *</label><input class="in" name="phone" inputmode="numeric" maxlength="10" required></div></div>
+    <div class="f"><label class="l">વિષય</label><input class="in" name="subjects" maxlength="80" placeholder="ઉદા. વિજ્ઞાન, ગણિત"></div>
+    <div class="f"><label class="l">કઈ બેચ સંભાળશે *</label>${batchChecks()}</div>
+    <button class="btn b-ink b-full" type="submit">શિક્ષક ઉમેરો અને લોગિન બનાવો</button></form>`);
+};
+FORMS.teacher = async (f, btn) => {
+  const v = formVals(f), bids = pickedBatches(f);
+  if (!v.name || !/^[6-9]\d{9}$/.test(v.phone)) return toast("નામ અને સાચો મોબાઇલ લખો.", true);
+  if (!bids.length) return toast("ઓછામાં ઓછી એક બેચ પસંદ કરો.", true);
+  await busy(btn, async () => {
+    try {
+      const n = await runTransaction(db, async tx => {
+        const ref = doc(db, "meta", "counters"), c = await tx.get(ref);
+        const k = c.exists() && c.data().teacher ? c.data().teacher + 1 : 1;
+        tx.set(ref, { teacher: k }, { merge: true }); return k;
+      });
+      const tid = "T" + n, pwd = genPwd();
+      const cr = await createUserWithEmailAndPassword(secAuth, idToEmail(tid), pwd);
+      const uid = cr.user.uid; await signOut(secAuth);
+      const b = writeBatch(db);
+      b.set(doc(db, "teachers", tid), { name: v.name, phone: v.phone, subjects: v.subjects || "", batchIds: bids, uid, active: true, createdAt: serverTimestamp() });
+      b.set(doc(db, "users", uid), { role: "teacher", name: v.name, teacherId: tid, batchIds: bids, studentIds: [] });
+      b.set(doc(db, "creds", tid), { sid: tid, teacherPwd: pwd });
+      await b.commit();
+      closeSheet(); showTeacherCreds(tid, pwd, v);
+    } catch (e) { fail(e); }
+  });
+};
+function showTeacherCreds(tid, pwd, t) {
+  const txt = `${ACADEMY.name} — શિક્ષક લોગિન\n${appUrl()}\n\nનામ: ${t.name}\nID: ${tid}\nપાસવર્ડ: ${pwd}`;
+  openSheet("શિક્ષક લોગિન તૈયાર", `<div class="card"><div class="kv"><span>ID</span><b>${esc(tid)}</b></div><div class="kv"><span>પાસવર્ડ</span><b>${esc(pwd)}</b></div></div>
+    <a class="btn b-wa b-full" target="_blank" rel="noopener" href="${waLink(t.phone, txt)}">${ic("wa")} શિક્ષકને WhatsApp પર મોકલો</a>`);
+}
+ACT.openTeacher = async el => {
+  const t = S.teachers.find(x => x.id === el.dataset.id); if (!t) return;
+  openSheet(t.name, `<form data-form="teacherUpd" data-id="${t.id}">
+    <div class="card"><div class="kv"><span>ID</span><b>${esc(t.id)}</b></div><div class="kv"><span>મોબાઇલ</span><b>${esc(t.phone)}</b></div>${t.subjects ? `<div class="kv"><span>વિષય</span><b>${esc(t.subjects)}</b></div>` : ""}</div>
+    <div class="f"><label class="l">બેચ</label>${batchChecks(t.batchIds || [])}</div>
+    <button class="btn b-ink b-full" type="submit">બેચ સાચવો</button></form>
+    <div class="row-btns" style="margin-top:10px"><a class="btn b-line" href="tel:+91${esc(t.phone)}">${ic("phone")} ફોન</a><button class="btn b-line" data-act="teacherCreds" data-id="${t.id}">લોગિન મોકલો</button>
+    <button class="btn ${t.active === false ? "b-line" : "b-bad"}" data-act="teacherActive" data-id="${t.id}" data-v="${t.active === false ? 1 : 0}">${t.active === false ? "ફરી ચાલુ કરો" : "લોગિન બંધ કરો"}</button></div>`);
+};
+FORMS.teacherUpd = async (f, btn) => {
+  const t = S.teachers.find(x => x.id === f.dataset.id), bids = pickedBatches(f);
+  await busy(btn, async () => {
+    try {
+      const b = writeBatch(db);
+      b.update(doc(db, "teachers", t.id), { batchIds: bids });
+      if (t.active !== false) b.update(doc(db, "users", t.uid), { batchIds: bids });
+      await b.commit(); closeSheet(); toast("સાચવ્યું.");
+    } catch (e) { fail(e); }
+  });
+};
+ACT.teacherCreds = async el => {
+  const t = S.teachers.find(x => x.id === el.dataset.id);
+  try { const c = await getDoc(doc(db, "creds", t.id)); showTeacherCreds(t.id, c.data()?.teacherPwd || "", t); } catch (e) { fail(e); }
+};
+ACT.teacherActive = async el => {
+  const t = S.teachers.find(x => x.id === el.dataset.id), on = el.dataset.v === "1";
+  if (!on && !confirm(`${t.name} નું લોગિન બંધ કરવું છે?`)) return;
+  try {
+    const b = writeBatch(db);
+    b.update(doc(db, "teachers", t.id), { active: on });
+    b.update(doc(db, "users", t.uid), { role: on ? "teacher" : "inactive", batchIds: on ? (t.batchIds || []) : [] });
+    await b.commit(); closeSheet(); toast(on ? "ચાલુ કર્યું." : "બંધ કર્યું.");
+  } catch (e) { fail(e); }
+};
+
+// ---------- શિક્ષકનું ડેટા લોડિંગ ----------
+function startTeacher() {
+  const bids = S.profile.batchIds || [];
+  const merge = (name, key) => {
+    const parts = {};
+    bids.forEach(bid => S.unsub.push(onSnapshot(key(bid), snap => {
+      parts[bid] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      S[name] = Object.values(parts).flat(); schedule();
+    }, err => { console.error(name, err); toast("ડેટા લોડ ન થયો (" + name + ")", true); })));
+  };
+  merge("students", bid => query(collection(db, "roster"), where("batchId", "==", bid)));
+  merge("homework", bid => query(collection(db, "homework"), where("batchId", "==", bid)));
+  merge("punishments", bid => query(collection(db, "punishments"), where("batchId", "==", bid)));
+  const bparts = {}, tparts = {};
+  bids.forEach(bid => {
+    S.unsub.push(onSnapshot(doc(db, "batches", bid), d => { if (d.exists()) bparts[bid] = { id: d.id, ...d.data() }; S.batches = Object.values(bparts); schedule(); }, e => console.warn(e)));
+    S.unsub.push(onSnapshot(doc(db, "timetable", bid), d => { if (d.exists()) tparts[bid] = { id: d.id, ...d.data() }; else delete tparts[bid]; S.timetable = Object.values(tparts); schedule(); }, e => console.warn(e)));
+  });
+}
+function teHome() {
+  const dow = new Date().getDay(), tdw = (dow + 1) % 7;
+  const today = S.timetable.flatMap(t => slotsOf(t, dow).map(x => ({ ...x, b: t.id }))).sort((a, b) => tmin(a.start) - tmin(b.start));
+  const tom = S.timetable.flatMap(t => slotsOf(t, tdw).map(x => ({ ...x, b: t.id }))).sort((a, b) => tmin(a.start) - tmin(b.start));
+  const due = S.homework.filter(hwDue).length + S.punishments.filter(pnDue).length;
+  const L = arr => arr.length ? `<div class="list">${arr.map(x => `<div class="item" style="cursor:default"><span class="mid"><b>${t12(x.start)}–${t12(x.end)} · ${esc(x.subject)}</b><small>${esc(batchName(x.b))}${x.teacher ? " · " + esc(x.teacher) : ""}${x.room ? " · " + esc(x.room) : ""}</small></span></div>`).join("")}</div>` : `<div class="card small muted">કોઈ લેક્ચર નથી.</div>`;
+  return `<div class="card" style="background:var(--ink);color:#fff;border-color:var(--ink)"><small style="color:#AFC0EE">શિક્ષક · ${esc(S.profile.teacherId || "")}</small><h2 style="color:#fff;font-size:24px">${esc(S.profile.name || "")}</h2><small style="color:var(--gold)">${S.batches.map(b => esc(b.name)).join(" · ")}</small></div>
+  ${due ? `<button class="card item" style="border-radius:18px;border:2px solid var(--gold)" data-act="tab" data-t="hw"><span class="av">${due}</span><span class="mid"><b>આજે ચેક કરવાનું હોમવર્ક</b><small>હોમવર્ક અને સજા-હોમવર્ક</small></span><span class="tag t-warn">ચેક કરો</span></button>` : ""}
+  <div class="h"><h2>આજના લેક્ચર</h2></div>${L(today)}
+  <div class="h"><h2>કાલના લેક્ચર (${DAYS[tdw]})</h2></div>${L(tom)}
+  <button class="btn b-ink b-full" data-act="tab" data-t="att" style="margin-top:6px">${ic("check")} હાજરી પૂરો</button>`;
+}
+
 const VIEWS = {
   admin: { home: adminHome, students: adminStudents, att: adminAtt, hw: adminHw, fees: adminFees, tests: adminTests, more: adminMore },
   student: { home: stHome, hw: hwView, tests: stTests, notes: stNotes, progress: stProgress, notices: stNotices },
+  teacher: { home: teHome, att: adminAtt, hw: adminHw },
   parent: { home: paHome, hw: hwView, att: paAtt, marks: paMarks, fees: paFees, notices: stNotices }
 };
 
