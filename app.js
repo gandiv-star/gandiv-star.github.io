@@ -558,7 +558,7 @@ ACT.attSave = async el => {
       render();
       if (out.absent.length) {
         const abs = list.filter(s => out.absent.includes(s.id));
-        openSheet(`ગેરહાજર (${abs.length}) — વાલીને જાણ કરો`, `<div class="list">${abs.map(s => `<div class="item" style="cursor:default"><span class="mid"><b>${esc(s.name)}</b><small>${esc(s.parentPhone)}</small></span><a class="btn b-wa b-sm" target="_blank" rel="noopener" href="${waLink(s.parentPhone, `નમસ્તે ${s.parentName || ""},\n${ACADEMY.name}: ${s.name} આજે (${fmtD(A.date)}) ક્લાસમાં ગેરહાજર છે. કારણ જણાવશો.`)}">${ic("wa")} મોકલો</a></div>`).join("")}</div>`);
+        openSheet(`ગેરહાજર (${abs.length}) — વાલીને જાણ કરો`, `<div class="list">${abs.map(s => `<div class="item" style="cursor:default;flex-wrap:wrap"><span class="mid"><b>${esc(s.name)}</b><small>${esc(s.parentPhone)}</small></span><span class="row-btns"><a class="btn b-wa b-sm" target="_blank" rel="noopener" href="${waLink(s.parentPhone, `નમસ્તે ${s.parentName || ""},\n${ACADEMY.name}: ${s.name} આજે (${fmtD(A.date)}) ક્લાસમાં ગેરહાજર છે. કારણ જણાવશો.`)}">${ic("wa")}</a><a class="btn b-line b-sm" href="tel:+91${esc(s.parentPhone)}" aria-label="વાલીને ફોન">${ic("phone")} વાલી</a>${s.phone ? `<a class="btn b-line b-sm" href="tel:+91${esc(s.phone)}" aria-label="વિદ્યાર્થીને ફોન">${ic("phone")} વિદ્યાર્થી</a>` : ""}</span></div>`).join("")}</div>`);
       }
     } catch (e) { fail(e); }
   });
