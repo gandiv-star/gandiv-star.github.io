@@ -1,5 +1,5 @@
 // ગાંડિવ — ઓફલાઇન કેશ. કોડ બદલો ત્યારે VERSION વધારો.
-const VERSION = "gandiv-v1";
+const VERSION = "gandiv-v3";
 const SHELL = ["./", "index.html", "app.html", "app.js", "config.js", "manifest.json", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
